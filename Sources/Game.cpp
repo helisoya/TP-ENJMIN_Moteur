@@ -19,7 +19,18 @@ using Microsoft::WRL::ComPtr;
 Shader* basicShader;
 
 ComPtr<ID3D11Buffer> vertexBuffer;
+ComPtr<ID3D11Buffer> indexBuffer;
+ComPtr<ID3D11Buffer> constantBuffer;
 ComPtr<ID3D11InputLayout> inputLayout;
+
+struct MatrixData {
+	Matrix mModel;
+	Matrix mView;
+	Matrix mProjection;
+};
+
+MatrixData matrixData;
+
 
 // Game
 Game::Game() noexcept(false) {
@@ -49,8 +60,10 @@ void Game::Initialize(HWND window, int width, int height) {
 
 	auto device = m_deviceResources->GetD3DDevice();
 
+
 	const std::vector<D3D11_INPUT_ELEMENT_DESC> InputElementDescs = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
 	};
 	device->CreateInputLayout(
 		InputElementDescs.data(), InputElementDescs.size(),
@@ -58,6 +71,79 @@ void Game::Initialize(HWND window, int width, int height) {
 		inputLayout.ReleaseAndGetAddressOf());
 
 	// TP: allouer vertexBuffer ici
+
+	std::vector<float> position = {
+		-0.5f,0.5f, 0.0f, 1.0f,0.0f,0.0f, 1.0f,
+		0.5f,0.5f, 0.0f, 1.0f,1.0f,1.0f, 1.0f,
+		0.5f,-0.5f, 0.0f, 0.0f,0.0f,1.0f, 1.0f,
+		-0.5f,-0.5f, 0.0f, 1.0f,1.0f,1.0f, 1.0f
+	};
+
+	std::vector<UINT> indexData = {
+		0,1,2,
+		2,3,0
+	};
+
+	matrixData = {};
+	matrixData.mModel = Matrix().Transpose();
+	matrixData.mView = Matrix::CreateLookAt(Vector3(0,0,5), Vector3::Zero, Vector3::Up).Transpose();
+	matrixData.mProjection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(60),1,0.1f, 1000.0f).Transpose();
+
+
+
+	// Vertex Buffer
+	CD3D11_BUFFER_DESC desc = CD3D11_BUFFER_DESC(
+		sizeof(float) * position.size(),
+		D3D11_BIND_VERTEX_BUFFER
+	);
+
+	D3D11_SUBRESOURCE_DATA data = {};
+	data.pSysMem = position.data();
+
+
+	device->CreateBuffer(
+		&desc,
+		&data,
+		vertexBuffer.ReleaseAndGetAddressOf()
+	);
+
+	// Constant Buffer
+	CD3D11_BUFFER_DESC descConstant = CD3D11_BUFFER_DESC(
+		sizeof(MatrixData),
+		D3D11_BIND_CONSTANT_BUFFER
+	);
+
+	D3D11_SUBRESOURCE_DATA dataConstant = {};
+	dataConstant.pSysMem = &matrixData;
+
+
+	device->CreateBuffer(
+		&descConstant,
+		&dataConstant,
+		constantBuffer.ReleaseAndGetAddressOf()
+	);
+
+	auto context = m_deviceResources->GetD3DDeviceContext();
+	ID3D11Buffer* cbs[] = { constantBuffer.Get() };
+	context->VSSetConstantBuffers(0, 1, cbs);
+
+	// Index Buffer
+	
+	CD3D11_BUFFER_DESC descIdx = CD3D11_BUFFER_DESC(
+		sizeof(UINT) * indexData.size(),
+		D3D11_BIND_INDEX_BUFFER
+	);
+
+	D3D11_SUBRESOURCE_DATA dataIdx = {};
+	dataIdx.pSysMem = indexData.data();
+
+
+	device->CreateBuffer(
+		&descIdx,
+		&dataIdx,
+		indexBuffer.ReleaseAndGetAddressOf()
+	);
+
 }
 
 void Game::Tick() {
@@ -79,6 +165,13 @@ void Game::Update(DX::StepTimer const& timer) {
 		ExitGame();
 
 	auto const pad = m_gamePad->GetState(0);
+
+	Vector3 newPos = Vector3(std::cosf(timer.GetTotalSeconds() * 5), std::sinf(timer.GetTotalSeconds() * 5), 5);
+	matrixData.mView = Matrix::CreateLookAt(newPos, newPos + Vector3::Forward, Vector3::Up).Transpose();
+
+	matrixData.mModel = matrixData.mModel.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds() * 200)).Transpose();
+
+	//matrixData.mView = matrixData.mView.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds()*50));
 }
 
 // Draws the scene.
@@ -92,7 +185,7 @@ void Game::Render() {
 	auto depthStencil = m_deviceResources->GetDepthStencilView();
 	auto const viewport = m_deviceResources->GetScreenViewport();
 
-	context->ClearRenderTargetView(renderTarget, Colors::CornflowerBlue);
+	context->ClearRenderTargetView(renderTarget, Color(0,1,0));
 	context->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 	context->RSSetViewports(1, &viewport);
 	context->OMSetRenderTargets(1, &renderTarget, depthStencil);
@@ -103,6 +196,24 @@ void Game::Render() {
 	basicShader->Apply(m_deviceResources.get());
 
 	// TP: Tracer votre vertex buffer ici
+
+	context->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &matrixData, 0, 0);
+
+	ID3D11Buffer* vbs[] = { vertexBuffer.Get()};
+	const UINT strides[] = { sizeof(float) * 7 };
+	const UINT offsets[] = { 0 };
+
+	context->IASetVertexBuffers(
+		0,
+		1,
+		vbs,
+		strides,
+		offsets
+	);
+
+	context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT,0 );
+
+	context->DrawIndexed(6, 0,0);
 
 	// envoie nos commandes au GPU pour etre afficher � l'�cran
 	m_deviceResources->Present();
