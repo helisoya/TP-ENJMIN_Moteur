@@ -20,16 +20,23 @@ Shader* basicShader;
 
 ComPtr<ID3D11Buffer> vertexBuffer;
 ComPtr<ID3D11Buffer> indexBuffer;
-ComPtr<ID3D11Buffer> constantBuffer;
+ComPtr<ID3D11Buffer> constantBufferModel;
+ComPtr<ID3D11Buffer> constantBufferCamera;
 ComPtr<ID3D11InputLayout> inputLayout;
 
-struct MatrixData {
-	Matrix mModel;
-	Matrix mView;
-	Matrix mProjection;
+struct ModelData {
+	Matrix model;
+};
+struct CameraData {
+	Matrix view;
+	Matrix projection;
 };
 
-MatrixData matrixData;
+// a terme a mettre dans une class Camera:
+Matrix view;
+Matrix projection;
+
+Matrix model;
 
 
 // Game
@@ -84,10 +91,9 @@ void Game::Initialize(HWND window, int width, int height) {
 		2,3,0
 	};
 
-	matrixData = {};
-	matrixData.mModel = Matrix().Transpose();
-	matrixData.mView = Matrix::CreateLookAt(Vector3(0,0,5), Vector3::Zero, Vector3::Up).Transpose();
-	matrixData.mProjection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(60),1,0.1f, 1000.0f).Transpose();
+	model = Matrix();
+	view = Matrix::CreateLookAt(Vector3(0,0,5), Vector3::Zero, Vector3::Up);
+	projection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(60),1,0.1f, 1000.0f);
 
 
 
@@ -108,24 +114,17 @@ void Game::Initialize(HWND window, int width, int height) {
 	);
 
 	// Constant Buffer
-	CD3D11_BUFFER_DESC descConstant = CD3D11_BUFFER_DESC(
-		sizeof(MatrixData),
-		D3D11_BIND_CONSTANT_BUFFER
-	);
 
-	D3D11_SUBRESOURCE_DATA dataConstant = {};
-	dataConstant.pSysMem = &matrixData;
-
-
+	CD3D11_BUFFER_DESC descModel(sizeof(ModelData), D3D11_BIND_CONSTANT_BUFFER);
 	device->CreateBuffer(
-		&descConstant,
-		&dataConstant,
-		constantBuffer.ReleaseAndGetAddressOf()
+		&descModel, nullptr,
+		constantBufferModel.ReleaseAndGetAddressOf()
 	);
-
-	auto context = m_deviceResources->GetD3DDeviceContext();
-	ID3D11Buffer* cbs[] = { constantBuffer.Get() };
-	context->VSSetConstantBuffers(0, 1, cbs);
+	CD3D11_BUFFER_DESC descCamera(sizeof(CameraData), D3D11_BIND_CONSTANT_BUFFER);
+	device->CreateBuffer(
+		&descCamera, nullptr,
+		constantBufferCamera.ReleaseAndGetAddressOf()
+	);
 
 	// Index Buffer
 	
@@ -167,9 +166,9 @@ void Game::Update(DX::StepTimer const& timer) {
 	auto const pad = m_gamePad->GetState(0);
 
 	Vector3 newPos = Vector3(std::cosf(timer.GetTotalSeconds() * 5), std::sinf(timer.GetTotalSeconds() * 5), 5);
-	matrixData.mView = Matrix::CreateLookAt(newPos, newPos + Vector3::Forward, Vector3::Up).Transpose();
+	view = Matrix::CreateLookAt(newPos, newPos + Vector3::Forward, Vector3::Up);
 
-	matrixData.mModel = matrixData.mModel.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds() * 200)).Transpose();
+	model = model.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds() * 200));
 
 	//matrixData.mView = matrixData.mView.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds()*50));
 }
@@ -197,7 +196,17 @@ void Game::Render() {
 
 	// TP: Tracer votre vertex buffer ici
 
-	context->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &matrixData, 0, 0);
+	ModelData dataModel = {};
+	dataModel.model = model.Transpose();
+	CameraData dataCamera = {};
+	dataCamera.view = view.Transpose();
+	dataCamera.projection = projection.Transpose();
+	context->UpdateSubresource(constantBufferModel.Get(), 0, nullptr, &dataModel, 0, 0);
+	context->UpdateSubresource(constantBufferCamera.Get(), 0, nullptr, &dataCamera, 0, 0);
+
+	ID3D11Buffer* cbs[] = { constantBufferModel.Get(), constantBufferCamera.Get() };
+	context->VSSetConstantBuffers(0, 2, cbs);
+
 
 	ID3D11Buffer* vbs[] = { vertexBuffer.Get()};
 	const UINT strides[] = { sizeof(float) * 7 };
