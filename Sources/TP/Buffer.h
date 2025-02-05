@@ -24,6 +24,9 @@ public:
 		return data.size();
 	}
 
+	void Flush() {
+		data.clear();
+	}
 
 	void Create(DeviceResources* deviceRes) {
 		CD3D11_BUFFER_DESC desc = CD3D11_BUFFER_DESC(
@@ -33,7 +36,6 @@ public:
 
 		D3D11_SUBRESOURCE_DATA dataInitial = {};
 		dataInitial.pSysMem = data.data();
-
 
 		deviceRes->GetD3DDevice()->CreateBuffer(
 			&desc,
@@ -81,6 +83,10 @@ public:
 
 	int Size() {
 		return data.size();
+	}
+
+	void Flush() {
+		data.clear();
 	}
 
 

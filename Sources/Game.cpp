@@ -8,12 +8,13 @@
 #include "PerlinNoise.hpp"
 #include "Engine/Shader.h"
 #include "Engine/VertexLayout.h"
-#include "TP/Cube.h"
+#include "TP/Chunck.h"
 #include "TP/Buffer.h"
 #include "TP/Camera.h"
 #include "Engine/Texture.h"
 #include "TP/Block.h"
 #include "TP/Skybox.h"
+#include "TP/World.h"
 
 extern void ExitGame() noexcept;
 
@@ -32,13 +33,11 @@ struct ModelData {
 
 
 
-ConstantBuffer<ModelData> constantBufferModel;
-
 Camera camera(60,1);
 Texture texture(L"terrain");
 Texture textureSky(L"skybox");
-std::vector<Cube> cubes;
-Skybox skybox;
+
+World world;
 
 
 // Game
@@ -79,23 +78,8 @@ void Game::Initialize(HWND window, int width, int height) {
 
 	// TP: allouer vertexBuffer ici
 
-	BlockData data = BlockData::Get(SPAWNER);
-	for (int x = -5; x <= 5; x++) {
-		for (int y = -5; y <= 5; y++) {
-			for (int z = -5; z <= 5; z++) {
-				Cube& cube = cubes.emplace_back(Vector3(x * 2, y * 2, z * 2), data);
-				cube.Generate(m_deviceResources.get());
-			}
-		}
-	}
-
-	skybox.Generate(m_deviceResources.get());
-
+	world.Generate(m_deviceResources.get());
 	camera = Camera(60, (float)width / (float)height);
-
-	// Constant Buffer
-
-	constantBufferModel.Create(m_deviceResources.get());
 
 
 }
@@ -151,11 +135,8 @@ void Game::Render() {
 	camera.ApplyCamera(m_deviceResources.get());
 	textureSky.Apply(m_deviceResources.get());
 
-	ModelData dataModel = {};
-	dataModel.model = Matrix::CreateTranslation(camera.GetPosition()).Transpose();
+	world.DrawSkybox(camera.GetPosition(), m_deviceResources.get());
 
-	constantBufferModel.SetData(dataModel, m_deviceResources.get());
-	skybox.Draw(m_deviceResources.get());
 
 	// Rendering
 
@@ -163,17 +144,8 @@ void Game::Render() {
 
 	camera.ApplyCamera(m_deviceResources.get());
 	texture.Apply(m_deviceResources.get());
-	
-	float t = m_timer.GetTotalSeconds();
-	for (Cube& c : cubes) {
-		ModelData dataModel = {};
-		dataModel.model = (Matrix::CreateRotationZ(t += 0.2) * Matrix::CreateRotationY(t += 0.2) * Matrix::CreateRotationX(t+=0.2) * c.GetModel()).Transpose();
 
-		constantBufferModel.SetData(dataModel, m_deviceResources.get());
-		constantBufferModel.ApplyToVS(m_deviceResources.get(), 0);
-
-		c.Draw(m_deviceResources.get());
-	}
+	world.Draw(m_deviceResources.get());
 
 	// envoie nos commandes au GPU pour etre afficher � l'�cran
 	m_deviceResources->Present();
