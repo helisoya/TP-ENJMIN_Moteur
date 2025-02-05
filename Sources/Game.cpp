@@ -7,6 +7,13 @@
 
 #include "PerlinNoise.hpp"
 #include "Engine/Shader.h"
+#include "Engine/VertexLayout.h"
+#include "TP/Cube.h"
+#include "TP/Buffer.h"
+#include "TP/Camera.h"
+#include "Engine/Texture.h"
+#include "TP/Block.h"
+#include "TP/Skybox.h"
 
 extern void ExitGame() noexcept;
 
@@ -17,31 +24,26 @@ using Microsoft::WRL::ComPtr;
 
 // Global stuff
 Shader* basicShader;
-
-ComPtr<ID3D11Buffer> vertexBuffer;
-ComPtr<ID3D11Buffer> indexBuffer;
-ComPtr<ID3D11Buffer> constantBufferModel;
-ComPtr<ID3D11Buffer> constantBufferCamera;
-ComPtr<ID3D11InputLayout> inputLayout;
+Shader* skyboxShader;
 
 struct ModelData {
 	Matrix model;
 };
-struct CameraData {
-	Matrix view;
-	Matrix projection;
-};
 
-// a terme a mettre dans une class Camera:
-Matrix view;
-Matrix projection;
 
-Matrix model;
+
+ConstantBuffer<ModelData> constantBufferModel;
+
+Camera camera(60,1);
+Texture texture(L"terrain");
+Texture textureSky(L"skybox");
+std::vector<Cube> cubes;
+Skybox skybox;
 
 
 // Game
 Game::Game() noexcept(false) {
-	m_deviceResources = std::make_unique<DeviceResources>(DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 2);
+	m_deviceResources = std::make_unique<DeviceResources>(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, DXGI_FORMAT_D32_FLOAT, 2);
 	m_deviceResources->RegisterDeviceNotify(this);
 }
 
@@ -63,85 +65,38 @@ void Game::Initialize(HWND window, int width, int height) {
 	m_deviceResources->CreateWindowSizeDependentResources();
 
 	basicShader = new Shader(L"Basic");
+	skyboxShader = new Shader(L"Skybox");
 	basicShader->Create(m_deviceResources.get());
+	skyboxShader->Create(m_deviceResources.get());
+
+	texture.Create(m_deviceResources.get());
+	textureSky.Create(m_deviceResources.get());
 
 	auto device = m_deviceResources->GetD3DDevice();
 
 
-	const std::vector<D3D11_INPUT_ELEMENT_DESC> InputElementDescs = {
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0}
-	};
-	device->CreateInputLayout(
-		InputElementDescs.data(), InputElementDescs.size(),
-		basicShader->vsBytecode.data(), basicShader->vsBytecode.size(),
-		inputLayout.ReleaseAndGetAddressOf());
+	GenerateInputLayout<VertexLayout_PositionUV>(m_deviceResources.get(), basicShader);
 
 	// TP: allouer vertexBuffer ici
 
-	std::vector<float> position = {
-		-0.5f,0.5f, 0.0f, 1.0f,0.0f,0.0f, 1.0f,
-		0.5f,0.5f, 0.0f, 1.0f,1.0f,1.0f, 1.0f,
-		0.5f,-0.5f, 0.0f, 0.0f,0.0f,1.0f, 1.0f,
-		-0.5f,-0.5f, 0.0f, 1.0f,1.0f,1.0f, 1.0f
-	};
+	BlockData data = BlockData::Get(SPAWNER);
+	for (int x = -5; x <= 5; x++) {
+		for (int y = -5; y <= 5; y++) {
+			for (int z = -5; z <= 5; z++) {
+				Cube& cube = cubes.emplace_back(Vector3(x * 2, y * 2, z * 2), data);
+				cube.Generate(m_deviceResources.get());
+			}
+		}
+	}
 
-	std::vector<UINT> indexData = {
-		0,1,2,
-		2,3,0
-	};
+	skybox.Generate(m_deviceResources.get());
 
-	model = Matrix();
-	view = Matrix::CreateLookAt(Vector3(0,0,5), Vector3::Zero, Vector3::Up);
-	projection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(60),1,0.1f, 1000.0f);
-
-
-
-	// Vertex Buffer
-	CD3D11_BUFFER_DESC desc = CD3D11_BUFFER_DESC(
-		sizeof(float) * position.size(),
-		D3D11_BIND_VERTEX_BUFFER
-	);
-
-	D3D11_SUBRESOURCE_DATA data = {};
-	data.pSysMem = position.data();
-
-
-	device->CreateBuffer(
-		&desc,
-		&data,
-		vertexBuffer.ReleaseAndGetAddressOf()
-	);
+	camera = Camera(60, (float)width / (float)height);
 
 	// Constant Buffer
 
-	CD3D11_BUFFER_DESC descModel(sizeof(ModelData), D3D11_BIND_CONSTANT_BUFFER);
-	device->CreateBuffer(
-		&descModel, nullptr,
-		constantBufferModel.ReleaseAndGetAddressOf()
-	);
-	CD3D11_BUFFER_DESC descCamera(sizeof(CameraData), D3D11_BIND_CONSTANT_BUFFER);
-	device->CreateBuffer(
-		&descCamera, nullptr,
-		constantBufferCamera.ReleaseAndGetAddressOf()
-	);
+	constantBufferModel.Create(m_deviceResources.get());
 
-	// Index Buffer
-	
-	CD3D11_BUFFER_DESC descIdx = CD3D11_BUFFER_DESC(
-		sizeof(UINT) * indexData.size(),
-		D3D11_BIND_INDEX_BUFFER
-	);
-
-	D3D11_SUBRESOURCE_DATA dataIdx = {};
-	dataIdx.pSysMem = indexData.data();
-
-
-	device->CreateBuffer(
-		&descIdx,
-		&dataIdx,
-		indexBuffer.ReleaseAndGetAddressOf()
-	);
 
 }
 
@@ -156,7 +111,7 @@ void Game::Tick() {
 // Updates the world.
 void Game::Update(DX::StepTimer const& timer) {
 	auto const kb = m_keyboard->GetState();
-	auto const ms = m_mouse->GetState();
+	//auto const ms = m_mouse->GetState();
 	
 	// add kb/mouse interact here
 	
@@ -165,12 +120,7 @@ void Game::Update(DX::StepTimer const& timer) {
 
 	auto const pad = m_gamePad->GetState(0);
 
-	Vector3 newPos = Vector3(std::cosf(timer.GetTotalSeconds() * 5), std::sinf(timer.GetTotalSeconds() * 5), 5);
-	view = Matrix::CreateLookAt(newPos, newPos + Vector3::Forward, Vector3::Up);
-
-	model = model.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds() * 200));
-
-	//matrixData.mView = matrixData.mView.CreateRotationX(XMConvertToRadians(timer.GetTotalSeconds()*50));
+	camera.Update(timer.GetElapsedSeconds(), kb, &m_mouse->Get());
 }
 
 // Draws the scene.
@@ -184,45 +134,46 @@ void Game::Render() {
 	auto depthStencil = m_deviceResources->GetDepthStencilView();
 	auto const viewport = m_deviceResources->GetScreenViewport();
 
-	context->ClearRenderTargetView(renderTarget, Color(0,1,0));
+	context->ClearRenderTargetView(renderTarget, Colors::DeepSkyBlue);
 	context->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 	context->RSSetViewports(1, &viewport);
 	context->OMSetRenderTargets(1, &renderTarget, depthStencil);
 	
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context->IASetInputLayout(inputLayout.Get());
+
+
+	ApplyInputLayout<VertexLayout_PositionUV>(m_deviceResources.get());
+
+
+	// Draw Skybox
+	skyboxShader->Apply(m_deviceResources.get());
+
+	camera.ApplyCamera(m_deviceResources.get());
+	textureSky.Apply(m_deviceResources.get());
+
+	ModelData dataModel = {};
+	dataModel.model = Matrix::CreateTranslation(camera.GetPosition()).Transpose();
+
+	constantBufferModel.SetData(dataModel, m_deviceResources.get());
+	skybox.Draw(m_deviceResources.get());
+
+	// Rendering
 
 	basicShader->Apply(m_deviceResources.get());
 
-	// TP: Tracer votre vertex buffer ici
+	camera.ApplyCamera(m_deviceResources.get());
+	texture.Apply(m_deviceResources.get());
+	
+	float t = m_timer.GetTotalSeconds();
+	for (Cube& c : cubes) {
+		ModelData dataModel = {};
+		dataModel.model = (Matrix::CreateRotationZ(t += 0.2) * Matrix::CreateRotationY(t += 0.2) * Matrix::CreateRotationX(t+=0.2) * c.GetModel()).Transpose();
 
-	ModelData dataModel = {};
-	dataModel.model = model.Transpose();
-	CameraData dataCamera = {};
-	dataCamera.view = view.Transpose();
-	dataCamera.projection = projection.Transpose();
-	context->UpdateSubresource(constantBufferModel.Get(), 0, nullptr, &dataModel, 0, 0);
-	context->UpdateSubresource(constantBufferCamera.Get(), 0, nullptr, &dataCamera, 0, 0);
+		constantBufferModel.SetData(dataModel, m_deviceResources.get());
+		constantBufferModel.ApplyToVS(m_deviceResources.get(), 0);
 
-	ID3D11Buffer* cbs[] = { constantBufferModel.Get(), constantBufferCamera.Get() };
-	context->VSSetConstantBuffers(0, 2, cbs);
-
-
-	ID3D11Buffer* vbs[] = { vertexBuffer.Get()};
-	const UINT strides[] = { sizeof(float) * 7 };
-	const UINT offsets[] = { 0 };
-
-	context->IASetVertexBuffers(
-		0,
-		1,
-		vbs,
-		strides,
-		offsets
-	);
-
-	context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT,0 );
-
-	context->DrawIndexed(6, 0,0);
+		c.Draw(m_deviceResources.get());
+	}
 
 	// envoie nos commandes au GPU pour etre afficher � l'�cran
 	m_deviceResources->Present();
@@ -255,6 +206,7 @@ void Game::OnWindowSizeChanged(int width, int height) {
 
 	// The windows size has changed:
 	// We can realloc here any resources that depends on the target resolution (post processing etc)
+	camera.UpdateAspectRatio((float)width / (float)height);
 }
 
 void Game::OnDeviceLost() {
