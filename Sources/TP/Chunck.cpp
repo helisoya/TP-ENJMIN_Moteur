@@ -9,6 +9,10 @@ Chunck::Chunck(Vector3 pos, int id)
 {
 	this->id = id;
 	model = Matrix::CreateTranslation(pos);
+
+	for (int i = 0; i < CHUNCK_SIZE * CHUNCK_SIZE * CHUNCK_HEIGHT; i++) {
+		mapIds[i] = EMPTY;
+	}
 }
 
 void Chunck::Generate(DeviceResources* deviceResources)

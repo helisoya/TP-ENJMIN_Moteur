@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "Camera.h"
+#include "World.h"
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -27,7 +28,7 @@ void Camera::UpdateAspectRatio(float aspectRatio) {
 	projection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(fov), aspectRatio, nearPlane, farPlane);
 }
 
-void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse) {
+void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse, World& world) {
 	float camSpeedRot = 0.10f;
 	float camSpeedMouse = 10.0f;
 	float camSpeed = 15.0f;
@@ -43,9 +44,14 @@ void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse) {
 	if (kb.D) delta += Vector3::Right;
 	camPos += Vector3::TransformNormal(delta, viewInverse) * camSpeed * dt;
 
+
 	if (mstate.positionMode == Mouse::MODE_RELATIVE) {
 		float dx = mstate.x;
 		float dy = mstate.y;
+
+		lastMouseX += dx;
+		lastMouseY += dy;
+
 		if (mstate.rightButton) {
 			Vector3 deltaMouse;
 			if (kb.LeftShift || kb.RightShift)
@@ -71,6 +77,34 @@ void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse) {
 	Vector3 newUp = Vector3::Transform(Vector3::Up, camRot);
 
 	view = Matrix::CreateLookAt(camPos, camPos + newForward, newUp);
+
+	if (kb.D1) currentIdxBlock = 0;
+	if (kb.D2) currentIdxBlock = 1;
+	if (kb.D3) currentIdxBlock = 2;
+	if (kb.D4) currentIdxBlock = 3;
+	if (kb.D5) currentIdxBlock = 4;
+	if (kb.D6) currentIdxBlock = 5;
+
+	if (kb.P) {
+		if (!isBuilding) {
+			isBuilding = true;
+
+			Matrix viewProjInvert = (view * projection).Invert().Transpose();
+
+			Vector3 nearVec(lastMouseX, -lastMouseY, 0);
+			Vector3 farVec(lastMouseX, -lastMouseY, 1);
+
+			Vector3 rayOrigin = XMVector3TransformCoord(nearVec, viewProjInvert);
+			Vector3 rayEnd = XMVector3TransformCoord(farVec, viewProjInvert);
+			Vector3 rayDir = (rayEnd - rayOrigin);
+			rayDir.Normalize();
+			
+			world.SearchForBlock(camPos, newForward, blocksToPlace[currentIdxBlock]);
+		}
+	}
+	else {
+		isBuilding = false;
+	}
 }
 
 void Camera::ApplyCamera(DeviceResources* deviceRes) {

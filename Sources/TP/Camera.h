@@ -1,6 +1,7 @@
 #pragma once
 
 #include "TP/Buffer.h"
+#include "World.h"
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -18,6 +19,10 @@ class Camera {
 	int lastMouseX = 0;
 	int lastMouseY = 0;
 
+	bool isBuilding = false;
+	int currentIdxBlock = 0;
+	BlockId blocksToPlace[6] = { EMPTY, DIRT, STONE,COBBLESTONE,DIAMOND_BLOCK,WOOD};
+
 	struct MatrixData {
 		Matrix mView;
 		Matrix mProjection;
@@ -31,7 +36,7 @@ public:
 	Vector3& GetPosition();
 
 	void UpdateAspectRatio(float aspectRatio);
-	void Update(float dt, DirectX::Keyboard::State kb, DirectX::Mouse* ms);
+	void Update(float dt, DirectX::Keyboard::State kb, DirectX::Mouse* ms, World& world);
 
 	void ApplyCamera(DeviceResources* deviceRes);
 };

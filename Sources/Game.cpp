@@ -57,6 +57,7 @@ void Game::Initialize(HWND window, int width, int height) {
 	m_keyboard = std::make_unique<Keyboard>();
 	m_mouse = std::make_unique<Mouse>();
 	m_mouse->SetWindow(window);
+	m_mouse->SetMode(Mouse::MODE_RELATIVE);
 
 	// Initialize the Direct3D resources
 	m_deviceResources->SetWindow(window, width, height);
@@ -104,7 +105,7 @@ void Game::Update(DX::StepTimer const& timer) {
 
 	auto const pad = m_gamePad->GetState(0);
 
-	camera.Update(timer.GetElapsedSeconds(), kb, &m_mouse->Get());
+	camera.Update(timer.GetElapsedSeconds(), kb, &m_mouse->Get(),world);
 }
 
 // Draws the scene.
