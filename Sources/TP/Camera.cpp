@@ -28,43 +28,36 @@ void Camera::UpdateAspectRatio(float aspectRatio) {
 }
 
 void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse) {
-	float camSpeedRot = 10.0f;
+	float camSpeedRot = 0.10f;
 	float camSpeedMouse = 10.0f;
 	float camSpeed = 15.0f;
 	if (kb.LeftShift) camSpeed *= 2.0f;
 
 	Mouse::State mstate = mouse->GetState();
-	const Matrix im = view.Invert();
+	const Matrix viewInverse = view.Invert();
 
-	// TP: deplacement par clavier 
-
-	float mx = kb.D - kb.Q;
-	float mz = kb.Z - kb.S;
-
-	Vector3 front = Vector3::TransformNormal(Vector3::Forward, im);
-	Vector3 right = Vector3::TransformNormal(Vector3::Right, im);
-	Vector3 up = Vector3::TransformNormal(Vector3::Up, im);
-
-	camPos += front * mz * camSpeed * dt + right * mx * camSpeed * dt;
+	Vector3 delta;
+	if (kb.Z) delta += Vector3::Forward;
+	if (kb.S) delta += Vector3::Backward;
+	if (kb.Q) delta += Vector3::Left;
+	if (kb.D) delta += Vector3::Right;
+	camPos += Vector3::TransformNormal(delta, viewInverse) * camSpeed * dt;
 
 	if (mstate.positionMode == Mouse::MODE_RELATIVE) {
 		float dx = mstate.x;
 		float dy = mstate.y;
-
-		lastMouseX = 0;
-		lastMouseY = 0;
-
 		if (mstate.rightButton) {
+			Vector3 deltaMouse;
+			if (kb.LeftShift || kb.RightShift)
+				deltaMouse = Vector3(0, 0, dy);
+			else
+				deltaMouse = Vector3(-dx, dy, 0);
+			camPos += Vector3::TransformNormal(deltaMouse, viewInverse) * camSpeed * dt;
 			// TP Translate camera a partir de dx/dy
-			camPos += right * dx * camSpeedMouse * dt - up * dy * camSpeedMouse * dt;
-
 		}
 		else if (mstate.leftButton) {
-			// TP Rotate camera a partir de dx/dy
-			lastMouseX = dx * dt * camSpeedRot;
-			lastMouseY = dy * dt * camSpeedRot;
-			//view *= Matrix::CreateRotationX(XMConvertToRadians(dx * dt * camSpeedRot)) * Matrix::CreateRotationY(XMConvertToRadians(dy * dt * camSpeedRot));
-
+			camRot *= Quaternion::CreateFromAxisAngle(Vector3::TransformNormal(Vector3::Right, viewInverse), -dy * dt);
+			camRot *= Quaternion::CreateFromAxisAngle(Vector3::Up, -dx * dt);
 		}
 		else {
 			mouse->SetMode(Mouse::MODE_ABSOLUTE);
@@ -74,10 +67,10 @@ void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse) {
 		mouse->SetMode(Mouse::MODE_RELATIVE);
 	}
 
-	// TP updater matrice view
+	Vector3 newForward = Vector3::Transform(Vector3::Forward, camRot);
+	Vector3 newUp = Vector3::Transform(Vector3::Up, camRot);
 
-	view = Matrix::CreateLookAt(camPos, camPos+front, up) 
-		* Matrix::Matrix::CreateRotationY(XMConvertToRadians(lastMouseX)) * Matrix::CreateRotationX(XMConvertToRadians(lastMouseY));
+	view = Matrix::CreateLookAt(camPos, camPos + newForward, newUp);
 }
 
 void Camera::ApplyCamera(DeviceResources* deviceRes) {

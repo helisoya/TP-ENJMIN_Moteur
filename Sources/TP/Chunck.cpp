@@ -3,9 +3,11 @@
 #include "Engine/VertexLayout.h"
 #include "TP/Buffer.h"
 #include "TP/Block.h"
+#include "TP/World.h"
 
-Chunck::Chunck(Vector3 pos)
+Chunck::Chunck(Vector3 pos, int id)
 {
+	this->id = id;
 	model = Matrix::CreateTranslation(pos);
 }
 
@@ -20,6 +22,11 @@ Matrix Chunck::GetModel()
 	return model;
 }
 
+BlockId Chunck::GetData(int x, int y, int z)
+{
+	return mapIds[To1D(x, y, z)];
+}
+
 void Chunck::SetModel(Matrix& matrix)
 {
 	this->model = matrix;
@@ -31,7 +38,7 @@ void Chunck::SetChunckData(Vector3 pos, BlockData& data)
 	mapIds[idx] = data.id;
 }
 
-void Chunck::GenerateMesh(DeviceResources* deviceRes)
+void Chunck::GenerateMesh(DeviceResources* deviceRes, std::vector<Chunck> &chuncks)
 {
 	BlockData data = BlockData::Get(EMPTY);
 
@@ -39,10 +46,10 @@ void Chunck::GenerateMesh(DeviceResources* deviceRes)
 	indexBuffer.Flush();
 
 	for (int x = 0; x < CHUNCK_SIZE; x++) {
-		for (int y = 0; y < CHUNCK_SIZE; y++) {
+		for (int y = 0; y < CHUNCK_HEIGHT; y++) {
 			for (int z = 0; z < CHUNCK_SIZE; z++) {
 				data = BlockData::Get(mapIds[To1D(x,y,z)]);
-				if(data.id != EMPTY) PushCube(Vector3(x, y, z), data,GenerateFlags(x,y,z));
+				if(data.id != EMPTY) PushCube(Vector3(x, y, z), data,GenerateFlags(x,y,z,chuncks));
 			}
 		}
 	}
@@ -93,8 +100,8 @@ void Chunck::Draw(DeviceResources* deviceResources)
 Vector3 Chunck::To3D(int x)
 {
 	Vector3 vec;
-	vec.z = ((int)x / (CHUNCK_SIZE * CHUNCK_SIZE));
-	x -= ((int)vec.z * CHUNCK_SIZE * CHUNCK_SIZE);
+	vec.z = ((int)x / (CHUNCK_SIZE * CHUNCK_HEIGHT));
+	x -= ((int)vec.z * CHUNCK_SIZE * CHUNCK_HEIGHT);
 	vec.y = (int)x / CHUNCK_SIZE;
 	vec.z = (int)x % CHUNCK_SIZE;
 
@@ -103,30 +110,62 @@ Vector3 Chunck::To3D(int x)
 
 int Chunck::To1D(int x, int y, int z)
 {
-	return (z * CHUNCK_SIZE * CHUNCK_SIZE) + (y * CHUNCK_SIZE) + x;
+	return (z * CHUNCK_SIZE * CHUNCK_HEIGHT) + (y * CHUNCK_SIZE) + x;
 }
 
-byte Chunck::GenerateFlags(int x, int y, int z)
+byte Chunck::GenerateFlags(int x, int y, int z, std::vector<Chunck>& chuncks)
 {
 	byte result = 0;
-	result |= ShouldDisplayFace(x,y,z,0,0,-1) ? 1 << 0 : 0;
-	result |= ShouldDisplayFace(x, y, z, 0, 0, 1) ? 1 << 1 : 0;
-	result |= ShouldDisplayFace(x, y, z, 0, -1, 0) ? 1 << 2 : 0;
-	result |= ShouldDisplayFace(x, y, z, 0, 1, 0) ? 1 << 3 : 0;
-	result |= ShouldDisplayFace(x, y, z, -1, 0, 0) ? 1 << 4 : 0;
-	result |= ShouldDisplayFace(x, y, z, 1, 0, 0) ? 1 << 5 : 0;
+	result |= ShouldDisplayFace(x,y,z,0,0,-1,chuncks) ? 1 << 0 : 0;
+	result |= ShouldDisplayFace(x, y, z, 0, 0, 1, chuncks) ? 1 << 1 : 0;
+	result |= ShouldDisplayFace(x, y, z, 0, -1, 0, chuncks) ? 1 << 2 : 0;
+	result |= ShouldDisplayFace(x, y, z, 0, 1, 0, chuncks) ? 1 << 3 : 0;
+	result |= ShouldDisplayFace(x, y, z, -1, 0, 0, chuncks) ? 1 << 4 : 0;
+	result |= ShouldDisplayFace(x, y, z, 1, 0, 0, chuncks) ? 1 << 5 : 0;
 
 	return result;
 }
 
-bool Chunck::ShouldDisplayFace(int x, int y, int z, int dx, int dy, int dz)
+bool Chunck::ShouldDisplayFace(int x, int y, int z, int dx, int dy, int dz, std::vector<Chunck>& chuncks)
 {
 	int nx = x + dx;
 	int ny = y + dy;
 	int nz = z + dz;
 
-	if (nx < 0 || nx >= CHUNCK_SIZE || ny < 0 || ny >= CHUNCK_SIZE || nz < 0 || nz >= CHUNCK_SIZE) return true;
+	BlockData data = BlockData::Get(mapIds[To1D(x, y, z)]);
+	BlockData dataOther = BlockData::Get(EMPTY);
 
-	BlockData data =BlockData::Get(mapIds[To1D(nx, ny, nz)]);
-	return data.id == EMPTY || data.transparent;
+	if (ny < 0 || ny >= CHUNCK_HEIGHT) return true; // Seulement 1 chunck de hauteur
+
+	// coords hors chunck
+	if (nx < 0 || nx >= CHUNCK_SIZE || nz < 0 || nz >= CHUNCK_SIZE) {
+
+		int xc = id % MAP_SIZE;
+		int yc = id / MAP_SIZE;
+
+		int xo = xc + dx;
+		int yo = yc + dz;
+
+		
+		if (xo < 0 || xo >= MAP_SIZE || yo < 0 || yo >= MAP_SIZE) {
+			// coords hors World
+			return true;
+		}
+		else {
+			// coords dans World
+			int idO = yo * MAP_SIZE + xo;
+
+			dataOther = BlockData::Get(chuncks.at(idO).GetData((nx + CHUNCK_SIZE) % CHUNCK_SIZE, ny, (nz + CHUNCK_SIZE) % CHUNCK_SIZE));
+		}
+	}
+	else {
+		// coords dans chunck
+		dataOther = BlockData::Get(mapIds[To1D(nx, ny, nz)]);
+	}
+
+
+	
+
+	if (dataOther.transparent && data.id == dataOther.id) return false;
+	return dataOther.id == EMPTY || dataOther.transparent;
 }

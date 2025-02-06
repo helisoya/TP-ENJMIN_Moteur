@@ -4,6 +4,9 @@
 #include "TP/Buffer.h"
 #include "TP/Chunck.h"
 #include "TP/Skybox.h"
+#include "PerlinNoise.hpp"
+
+#define MAP_SIZE 20
 
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
@@ -33,4 +36,8 @@ public:
 	void DrawSkybox(Vector3 pos, DeviceResources* deviceRes);
 
 private:
+
+	void GenerateChunck(Vector3 pos, siv::BasicPerlinNoise<float> &noise, siv::BasicPerlinNoise<float>& noiseCave, DeviceResources* deviceRes);
+	void GenerateMesh(DeviceResources* deviceRes);
+
 };
