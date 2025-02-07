@@ -7,7 +7,7 @@ class Skybox {
 public:
 
 private:
-	VertexBuffer<VertexLayout_PositionUV> vertexBuffer;
+	VertexBuffer<VertexLayout_PositionNormalUV> vertexBuffer;
 	IndexBuffer indexBuffer;
 
 public:

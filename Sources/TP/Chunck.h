@@ -16,7 +16,7 @@ public:
 
 private:
 	int id;
-	VertexBuffer<VertexLayout_PositionUV> vertexBuffer;
+	VertexBuffer<VertexLayout_PositionNormalUV> vertexBuffer;
 	IndexBuffer indexBuffer;
 
 	Matrix model;

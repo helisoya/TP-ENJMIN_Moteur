@@ -15,6 +15,7 @@
 #include "TP/Block.h"
 #include "TP/Skybox.h"
 #include "TP/World.h"
+#include "TP/Light.h";
 
 extern void ExitGame() noexcept;
 
@@ -38,6 +39,7 @@ Texture texture(L"terrain");
 Texture textureSky(L"skybox");
 
 World world;
+Light light;
 
 
 // Game
@@ -75,11 +77,12 @@ void Game::Initialize(HWND window, int width, int height) {
 	auto device = m_deviceResources->GetD3DDevice();
 
 
-	GenerateInputLayout<VertexLayout_PositionUV>(m_deviceResources.get(), basicShader);
+	GenerateInputLayout<VertexLayout_PositionNormalUV>(m_deviceResources.get(), basicShader);
 
 	// TP: allouer vertexBuffer ici
 
 	world.Generate(m_deviceResources.get());
+	light.Generate(m_deviceResources.get());
 	camera = Camera(60, (float)width / (float)height);
 
 
@@ -127,8 +130,7 @@ void Game::Render() {
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 
-	ApplyInputLayout<VertexLayout_PositionUV>(m_deviceResources.get());
-
+	ApplyInputLayout<VertexLayout_PositionNormalUV>(m_deviceResources.get());
 
 	// Draw Skybox
 	skyboxShader->Apply(m_deviceResources.get());
@@ -145,6 +147,7 @@ void Game::Render() {
 
 	camera.ApplyCamera(m_deviceResources.get());
 	texture.Apply(m_deviceResources.get());
+	light.Apply(m_deviceResources.get());
 
 	world.Draw(m_deviceResources.get());
 

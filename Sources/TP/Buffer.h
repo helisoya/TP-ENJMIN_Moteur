@@ -154,6 +154,11 @@ public:
 		deviceRes->GetD3DDeviceContext()->VSSetConstantBuffers(slot, 1, cbs);
 	}
 
+	void ApplyToPS(DeviceResources* deviceRes, int slot = 0) {
+		ID3D11Buffer* cbs[] = { buffer.Get() };
+		deviceRes->GetD3DDeviceContext()->PSSetConstantBuffers(slot, 1, cbs);
+	}
+
 private:
 
 

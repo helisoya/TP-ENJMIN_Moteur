@@ -31,10 +31,12 @@ void Skybox::PushFace(Vector3 pos, Vector3 up, Vector3 right, int uvIdx)
 	float uvx = uvIdx % 2;
 	float uvy = uvIdx / 2;
 
-	vertexBuffer.PushVertex({ ToVec4(pos), {uvx, uvy + 1.0f} });
-	vertexBuffer.PushVertex({ ToVec4(pos + up), {uvx, uvy} });
-	vertexBuffer.PushVertex({ ToVec4(pos + right), {uvx + 1.0f, uvy + 1.0f} });
-	vertexBuffer.PushVertex({ ToVec4(pos + up + right), {uvx + 1.0f, uvy} });
+	Vector4 normal = up.Cross(right);
+
+	vertexBuffer.PushVertex({ ToVec4(pos),normal, {uvx, uvy + 1.0f} });
+	vertexBuffer.PushVertex({ ToVec4(pos + up),normal, {uvx, uvy} });
+	vertexBuffer.PushVertex({ ToVec4(pos + right),normal, {uvx + 1.0f, uvy + 1.0f} });
+	vertexBuffer.PushVertex({ ToVec4(pos + up + right),normal, {uvx + 1.0f, uvy} });
 
 	indexBuffer.PushTriangle(currentIndex, currentIndex + 2, currentIndex + 1);
 	indexBuffer.PushTriangle(currentIndex + 2, currentIndex + 3, currentIndex + 1);

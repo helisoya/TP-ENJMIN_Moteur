@@ -3,6 +3,7 @@ SamplerState samplerState : register(s0);
 
 struct Input {
     float4 pos : SV_POSITION;
+    float4 normal : NORMAL0;
     float2 uv : TEXCOORD0;
 };
 
