@@ -6,6 +6,8 @@
 #include "TP/Skybox.h"
 #include "PerlinNoise.hpp"
 
+
+class Camera;
 #define MAP_SIZE 20
 
 using namespace DirectX;
@@ -34,10 +36,14 @@ public:
 
 	void Generate(DeviceResources* deviceRes);
 
-	void Draw(DeviceResources* deviceRes);
+	void Draw(DeviceResources* deviceRes, Camera& camera);
 	void DrawSkybox(Vector3 pos, DeviceResources* deviceRes);
+	void DrawWater(DeviceResources* deviceRes, Camera& camera);
 
 	void SearchForBlock(Vector3 pos, Vector3 forward,BlockId replaceWith);
+	std::vector<std::array<int, 3>> Raycast(Vector3 pos, Vector3 dir, float maxDist);
+
+	BlockId GetCube(int gx, int gy, int gz);
 
 private:
 
@@ -46,4 +52,6 @@ private:
 
 	void GenerateChunck(Vector3 pos, siv::BasicPerlinNoise<float> &noise, siv::BasicPerlinNoise<float>& noiseCave, DeviceResources* deviceRes);
 	void GenerateMesh(DeviceResources* deviceRes);
+
+	
 };

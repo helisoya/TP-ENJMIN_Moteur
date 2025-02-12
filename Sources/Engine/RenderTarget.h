@@ -29,5 +29,5 @@ public:
 	void Create(DeviceResources* deviceRes);
 	void Clear(DeviceResources* deviceRes);
 	void ApplyTarget(DeviceResources* deviceRes);
-	void ApplyShaderResourcePS(DeviceResources* deviceRes, int slot);
+	void ApplyShaderResourcePS(DeviceResources* deviceRes, int slotRV, int slotDepth);
 };

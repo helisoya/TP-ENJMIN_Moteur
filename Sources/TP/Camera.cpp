@@ -6,11 +6,9 @@
 using namespace DirectX;
 using namespace DirectX::SimpleMath;
 
-Camera::Camera(float fov, float aspectRatio) : fov(fov) {
-	// TP initialiser matrices
-	camPos = Vector3(0, 0, 5);
-	view = Matrix::CreateLookAt(Vector3(0, 0, 5), Vector3::Zero, Vector3::Up);
-	projection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(fov), aspectRatio, nearPlane, farPlane);
+
+Camera::Camera()
+{
 }
 
 Camera::~Camera() {
@@ -18,12 +16,8 @@ Camera::~Camera() {
 	cbCamera = nullptr;
 }
 
-Vector3& Camera::GetPosition()
-{
-	return camPos;
-}
 
-void Camera::UpdateAspectRatio(float aspectRatio) {
+void PerspectiveCamera::UpdateAspectRatio(float aspectRatio) {
 	// TP updater matrice proj
 	projection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(fov), aspectRatio, nearPlane, farPlane);
 }
@@ -73,38 +67,18 @@ void Camera::Update(float dt, Keyboard::State kb, Mouse* mouse, World& world) {
 		mouse->SetMode(Mouse::MODE_RELATIVE);
 	}
 
+	UpdateViewMatrix();
+}
+
+void Camera::UpdateViewMatrix()
+{
 	Vector3 newForward = Vector3::Transform(Vector3::Forward, camRot);
 	Vector3 newUp = Vector3::Transform(Vector3::Up, camRot);
 
 	view = Matrix::CreateLookAt(camPos, camPos + newForward, newUp);
 
-	if (kb.D1) currentIdxBlock = 0;
-	if (kb.D2) currentIdxBlock = 1;
-	if (kb.D3) currentIdxBlock = 2;
-	if (kb.D4) currentIdxBlock = 3;
-	if (kb.D5) currentIdxBlock = 4;
-	if (kb.D6) currentIdxBlock = 5;
-
-	if (kb.P) {
-		if (!isBuilding) {
-			isBuilding = true;
-
-			Matrix viewProjInvert = (view * projection).Invert().Transpose();
-
-			Vector3 nearVec(lastMouseX, -lastMouseY, 0);
-			Vector3 farVec(lastMouseX, -lastMouseY, 1);
-
-			Vector3 rayOrigin = XMVector3TransformCoord(nearVec, viewProjInvert);
-			Vector3 rayEnd = XMVector3TransformCoord(farVec, viewProjInvert);
-			Vector3 rayDir = (rayEnd - rayOrigin);
-			rayDir.Normalize();
-			
-			world.SearchForBlock(camPos, newForward, blocksToPlace[currentIdxBlock]);
-		}
-	}
-	else {
-		isBuilding = false;
-	}
+	BoundingFrustum::CreateFromMatrix(frustum, projection, true);
+	frustum.Transform(frustum, view.Invert());
 }
 
 void Camera::ApplyCamera(DeviceResources* deviceRes) {
@@ -122,4 +96,10 @@ void Camera::ApplyCamera(DeviceResources* deviceRes) {
 	cbCamera->SetData(data, deviceRes);
 
 	cbCamera->ApplyToVS(deviceRes, 1);
+}
+
+PerspectiveCamera::PerspectiveCamera(float fov, float aspectRatio) : fov(fov)
+{
+	view = Matrix::CreateLookAt(Vector3(0, 0, 5), Vector3::Zero, Vector3::Up);
+	projection = Matrix::CreatePerspectiveFieldOfView(XMConvertToRadians(fov), aspectRatio, nearPlane, farPlane);
 }

@@ -8,6 +8,8 @@ void RenderTarget::Create(DeviceResources* deviceRes) {
 	auto d3dDevice = deviceRes->GetD3DDevice();
 	auto d3dContext = deviceRes->GetD3DDeviceContext();
 
+
+
 	if (mode != COLOR_ONLY) {
 		CD3D11_TEXTURE2D_DESC descDS(DXGI_FORMAT_R32_TYPELESS, width, height, 1, 0,
 			D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE);
@@ -59,10 +61,10 @@ void RenderTarget::ApplyTarget(DeviceResources* deviceRes) {
 	d3dContext->RSSetViewports(1, &viewport);
 }
 
-void RenderTarget::ApplyShaderResourcePS(DeviceResources* deviceRes, int slot) {
+void RenderTarget::ApplyShaderResourcePS(DeviceResources* deviceRes, int slotRV, int slotDepth) {
 	auto d3dDevice = deviceRes->GetD3DDevice();
 	auto d3dContext = deviceRes->GetD3DDeviceContext();
 
 	ID3D11ShaderResourceView* srvs[] = { shaderRV.Get() };
-	d3dContext->PSSetShaderResources(slot, 1, srvs);
+	d3dContext->PSSetShaderResources(slotRV, 1, srvs);
 }
